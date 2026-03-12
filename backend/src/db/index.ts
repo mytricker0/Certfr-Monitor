@@ -80,18 +80,24 @@ export async function getItems(params: {
   offset?: number;
 }): Promise<{ items: FeedItem[]; total: number }> {
   const { feedType, limit = 50, offset = 0 } = params;
-  const where = feedType ? `WHERE feed_type = $3` : '';
-  const args: unknown[] = [limit, offset];
-  if (feedType) args.push(feedType);
+
+  // SELECT uses $1=limit, $2=offset, $3=feedType (separate param lists per query)
+  const selectWhere = feedType ? `WHERE feed_type = $3` : '';
+  const selectArgs: unknown[] = [limit, offset];
+  if (feedType) selectArgs.push(feedType);
+
+  // COUNT uses $1=feedType only
+  const countWhere = feedType ? `WHERE feed_type = $1` : '';
+  const countArgs: unknown[] = feedType ? [feedType] : [];
 
   const [items, count] = await Promise.all([
     pool.query(
-      `SELECT * FROM feed_items ${where} ORDER BY pub_date DESC NULLS LAST LIMIT $1 OFFSET $2`,
-      args
+      `SELECT * FROM feed_items ${selectWhere} ORDER BY pub_date DESC NULLS LAST LIMIT $1 OFFSET $2`,
+      selectArgs
     ),
     pool.query(
-      `SELECT COUNT(*) FROM feed_items ${where}`,
-      feedType ? [feedType] : []
+      `SELECT COUNT(*) FROM feed_items ${countWhere}`,
+      countArgs
     ),
   ]);
 

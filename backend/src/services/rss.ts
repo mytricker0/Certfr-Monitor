@@ -21,7 +21,23 @@ export interface ParsedItem {
   pub_date: Date | null;
 }
 
-const parser = new XMLParser({ ignoreAttributes: false });
+// textNodeName ensures text content of tags with attributes is extracted correctly
+// e.g. <guid isPermaLink="true">https://...</guid> → { '#text': 'https://...', '@_isPermaLink': 'true' }
+const parser = new XMLParser({
+  ignoreAttributes: false,
+  textNodeName: '#text',
+});
+
+function extractText(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return String(val);
+  // Object with attributes: { '#text': 'actual value', '@_attr': '...' }
+  if (typeof val === 'object' && '#text' in (val as object)) {
+    return String((val as Record<string, unknown>)['#text']);
+  }
+  return '';
+}
 
 export async function fetchFeed(url: string): Promise<ParsedItem[]> {
   const res = await fetch(url, {
@@ -42,12 +58,14 @@ export async function fetchFeed(url: string): Promise<ParsedItem[]> {
   const arr = Array.isArray(items) ? items : [items];
 
   return arr.map((item: Record<string, unknown>) => {
-    const guid = String(item['guid'] ?? item['link'] ?? '');
-    const title = String(item['title'] ?? '(no title)');
-    const link = String(item['link'] ?? '');
-    const description = item['description'] ? String(item['description']) : null;
+    const link = extractText(item['link']);
+    // guid may have attributes like isPermaLink="true" — extract text content
+    const rawGuid = extractText(item['guid']);
+    const guid = rawGuid || link; // fall back to link if guid is empty
+    const title = extractText(item['title']) || '(no title)';
+    const description = item['description'] ? extractText(item['description']) : null;
     const pubDateRaw = item['pubDate'];
-    const pub_date = pubDateRaw ? new Date(String(pubDateRaw)) : null;
+    const pub_date = pubDateRaw ? new Date(extractText(pubDateRaw)) : null;
 
     return { guid, title, link, description, pub_date };
   });

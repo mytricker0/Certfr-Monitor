@@ -88,8 +88,12 @@ export default function Dashboard() {
     setLoading(true);
     try {
       const res = await getItems({ feedType: feedType === 'all' ? undefined : feedType, limit: LIMIT, offset: off });
-      setItems(res.items);
-      setTotal(res.total);
+      setItems(Array.isArray(res?.items) ? res.items : []);
+      setTotal(typeof res?.total === 'number' ? res.total : 0);
+    } catch (err) {
+      console.error('Failed to load items:', err);
+      setItems([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
